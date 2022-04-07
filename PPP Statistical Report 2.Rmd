@@ -1,0 +1,1752 @@
+---
+title: 'Pain Management in The ICU Point Prevalence Study: Statistical Report'
+author: "Dr. Benjamin Moran"
+output:
+  html_document: 
+    toc: true
+    toc_float: true
+  pdf_document: default
+  word_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+```
+
+## Part 1: Methods and Analysis
+
+[**Aims/Objectives**]{.ul}
+
+1.  Describe the pain assessment tools and frequency used in ICU
+    patients.
+2.  Describe the opioid management of ICU patients.
+3.  Describe the adjuvant analgesia used in ICU patients.
+4.  Describe the differences in pain assessment and analgesic management
+    in mechanically ventilated (vs non-ventilated) and post-operative
+    (vs non-operative) patients.
+
+[**Methods**]{.ul}
+
+This manuscript has been prepared in accordance with the Strengthening
+the Reporting of Observational Studies in Epidemiology (STROBE)
+Statement [@vonelm2008].
+
+[**Statistical Analysis**]{.ul}
+
+Descriptive statistics were used for demographic and clinical data.
+Normally distributed variables were reported as means (standard
+deviations) and non-normally distributed variables as medians
+(interquartile ranges). Proportions were reported as percentages.
+Differences were tested using the Mann-Whitney U for non-parametric
+distribution and Chi-squared or Fisher's Exact test for categorical
+data. No assumptions were made about missing data. Statistical analysis
+was performed using R Version 4.1.0 and RStudio Version 1.4.1714
+(RStudio Team (2021). RStudio: Integrated Development for R. RStudio,
+PBC, Boston, MA URL <http://www.rstudio.com/>) statistical software.
+Packages used for analysis included tidyverse, ggplot2 and gtsummary .
+*p* values \<0.05 were considered significant.\
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Open and attach CSV file #
+library(readxl)
+PPP <- read_excel("~/Research/PhD/2. Variable Selection- PPP/Data/PPP Data.xlsx")
+```
+
+\
+\
+\
+
+## Part 2: Patient Demographics
+
+```{r echo=FALSE, message=FALSE, fig.align='center'}
+library(tidyverse)
+library(gtsummary)
+
+# Remove Variables of Cardiac Surgery and Neurological (Brain)
+exclude <- c(401:405, 402.02, 407:410, 601, 601.06)
+exclude2 <- c(1202:1213, 1501:1503, 1505:1601)
+
+PPP<- PPP %>% filter(!(apacheiii_non_op %in% exclude)) %>% 
+  filter(!(apacheiii_postop %in% exclude2))
+
+# Rename Variables for admission diagnoses
+# Operative #
+PPP <- PPP %>% 
+  mutate(apache3 = case_when(
+            (apacheiii_postop>=1301) & (apacheiii_postop<=1304) ~ "Post-Operative",
+            (apacheiii_postop>=1401) & (apacheiii_postop<=1413) ~ "Post-Operative",
+            (apacheiii_postop>=1602) & (apacheiii_postop<=1605) ~ "Post-Operative",
+            (apacheiii_postop>=1701) & (apacheiii_postop<=1705) ~ "Post-Operative",
+            (apacheiii_postop>=1801) & (apacheiii_postop<=1803) ~ "Post-Operative",
+            (apacheiii_postop>=1902) & (apacheiii_postop<=1904) ~ "Post-Operative",
+            (apacheiii_postop==2101) ~ "Post-Operative",
+            (apacheiii_postop==2201) ~ "Post-Operative",
+            (apacheiii_non_op>=101) & (apacheiii_non_op<=111) ~ "Cardiovascular",
+            (apacheiii_non_op>=201) & (apacheiii_non_op<=213) ~ "Respiratory",
+            (apacheiii_non_op>=301) & (apacheiii_non_op<=313) ~ "Other",
+            (apacheiii_non_op>=406) & (apacheiii_non_op<407) ~ "Other",
+            (apacheiii_non_op>=501) & (apacheiii_non_op<=504) ~ "Sepsis",
+            (apacheiii_non_op>601) & (apacheiii_non_op<=605) ~ "Trauma",
+            (apacheiii_non_op>=701) & (apacheiii_non_op<=704) ~ "Other",
+            (apacheiii_non_op>=801) & (apacheiii_non_op<=802) ~ "Other",
+            (apacheiii_non_op>=901) & (apacheiii_non_op<=903) ~ "Other",
+            (apacheiii_non_op>=1101) & (apacheiii_non_op<=1102) ~ "Other"))
+  
+# Reorder Apache3
+PPP <- PPP %>% mutate(apache3 = factor(apache3, levels = c("Cardiovascular", "Respiratory", "Sepsis", "Trauma", "Post-Operative", "Other")))
+
+
+# Rename Variable Details
+PPP <- PPP %>% mutate(admit_source = case_when(
+            (admit_source == "Transfer from another hospital (except from another ICU)") ~ "Other",
+            (admit_source == "Hospital Floor (Ward)") ~ "Hospital Ward",
+            (admit_source == "Admitted from Operating Theatre following EMERGENCY surgery") ~ "Operating Theatre",
+            (admit_source == "Admitted from Operating Theatre following ELECTIVE surgery") ~ "Operating Theatre",
+            (admit_source == "Emergency Department") ~ "Emergency Department",
+            (admit_source == "Transfer from another ICU") ~ "Other"))
+
+# Reorder Admission Source
+PPP <- PPP %>% mutate(admit_source = factor(admit_source, levels = c("Emergency Department", "Operating Theatre", "Hospital Ward", "Other")))
+
+
+PPP <- PPP %>% mutate(mech_vent = case_when(
+                (mech_vent == "No") ~ "Non-Ventilated",
+                (mech_vent == "Yes") ~ "Ventilated"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(mech_vent = factor(mech_vent, levels = c(
+    "Ventilated", "Non-Ventilated")))
+
+
+# Generate Table 1
+
+PPP %>% 
+  select(age, gender, apacheiiscore, apache3, admit_source, mech_vent) %>% 
+    tbl_summary(by = mech_vent, missing = "no",
+                label = list(age="Age (Years)",
+                 gender="Sex",
+                 apacheiiscore="APACHE2 Score",
+                 apache3="Admission Diagnosis",
+                 admit_source="Admission Source"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 1. Patient Demographics**")
+```
+
+\
+\
+\
+
+## Part 3: Assessment of Pain
+
+### Part a: Pain Assessment Tool
+
+Data on which pain assessment tools were being used in both mechanically
+ventilated and non-mechanically ventilated patients were collected. The
+table of the breakdown is seen below.\
+\
+
+```{r echo=FALSE, message=FALSE, fig.align='center'}
+# Part 2: Assessment of Pain #
+
+PPP <- PPP %>% 
+  mutate(Assesstool = case_when(
+            (pain_tool___1 == "Checked") ~ "Critical Care Pain Observation Tool",
+            (pain_tool___2 == "Checked") ~ "Behavioural Pain Score",
+            (pain_tool___3 == "Checked") ~ "Numerical Pain Score",
+            (pain_tool___4 == "Checked") ~ "Faces",
+            (pain_tool___5 == "Checked") ~ "Non-Verbal Pain Score",
+            (pain_tool___6 == "Checked") ~ "Non-Validated Tool",
+            (pain_tool___7 == "Checked") ~ "Non-Validated Tool")) %>% 
+ mutate(Assesstool = fct_explicit_na(Assesstool, na_level = "None"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(Assesstool = factor(Assesstool, levels = c(
+    "Critical Care Pain Observation Tool", "Behavioural Pain Score", "Numerical Pain Score", 
+    "Faces", "Non-Verbal Pain Score", "Non-Validated Tool", "None")))
+
+PPP %>% 
+  select(Assesstool, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(Assesstool="Pain Assessment Tool"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()%>%
+  modify_caption("**Table 2. Pain Assessment Tools**") 
+
+```
+
+\
+\
+
+A graph of the pain assessment tools with MV/Non-MV strata is seen
+below.
+
+\
+\
+
+```{r, echo=FALSE, message=FALSE, fig.align='center'}
+# Bar Chart of Assessment Tools #
+library(ggplot2)
+
+positions<-c("Critical Care Pain Observation Tool", "Behavioural Pain Score", "Numerical Pain Score", "Faces", "Non-Verbal Pain Score", "Non-Validated Tool" , "None")
+PPP %>% ggplot()+ 
+  geom_bar(aes(x=Assesstool, fill=mech_vent), position = "dodge") + 
+  scale_fill_manual(values = c("steelblue3", "grey65"))+
+  theme_bw() +
+  theme(legend.title = element_blank(), legend.position = "bottom")+
+  scale_x_discrete(limits=positions, labels=c("CPOT", "BPS", "NPS", "Faces", "NVPS", "Non-Val", "None" ))+
+  labs(x="Assessment Tools", y="Tool Count", title="Figure 1: Pain Assessment Tools")
+
+Fig1 <- PPP %>% ggplot(aes(x = Assesstool, group = mech_vent))+
+  geom_bar(aes(y = ..prop.., fill = mech_vent), stat="count")+
+  scale_y_continuous(labels=scales::percent_format(accuracy = 1L))+
+  theme_bw()+
+  facet_grid(. ~mech_vent)+
+  theme(legend.position = "none",
+        panel.border = element_blank(),
+        strip.background = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.spacing.x = unit(2, "lines"))+
+  scale_fill_manual(values = c("#abbcea", "#4D81DA"))+
+  scale_x_discrete(limits=positions, labels=c("CPOT", "BPS", "NPS", "Faces", "NVPS", "Non-Val", "None" ))+
+  labs(x="Assessment Tools", y="Percentage (%)", title="Figure 1: Pain Assessment Tools")+
+  geom_text(aes( label = scales::percent(..prop.., accuracy = 0.1),
+                   y= ..prop..), stat= "count", vjust = -.5, size = 3)
+
+ggsave("Fig1.png", dpi = 300)
+
+```
+
+\
+\
+
+### Part b: Pain Assessment Frequency
+
+Data on the frequency of pain assessment performed in both mechanically
+ventilated and non-mechanically ventilated patients were collected. The
+table of the breakdown is seen below.\
+\
+
+```{r, echo=FALSE, fig.align='center'}
+
+# Tidy data for assessment frequency
+
+PPP <- PPP %>% mutate(freq_assess = case_when(
+  (freq_assess=="Hourly") ~ "Hourly",
+  (freq_assess=="2 hourly") ~ "2 Hourly",
+  (freq_assess=="4 hourly") ~ "4 Hourly",
+  (freq_assess=="6 hourly") ~ "6 Hourly",
+  (freq_assess=="8 hourly") ~ "8 Hourly",
+  (freq_assess=="12 hourly") ~ "12 Hourly",
+  (freq_assess=="Other") ~ "Other/None")) %>% 
+ mutate(freq_assess = fct_explicit_na(freq_assess, na_level = "Other/None"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(freq_assess = factor(freq_assess, levels = c(
+    "Hourly", "2 Hourly", "4 Hourly", "6 Hourly", "8 Hourly", "12 Hourly", "Other/None")))
+
+PPP %>% 
+  select(freq_assess, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(freq_assess="Pain Assessment Frequency"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 3. Pain Assessment Frequency**")
+
+```
+
+\
+\
+A graph of the pain assessment frequency with MV/Non-MV strata is seen
+below.\
+\
+
+```{r, echo=FALSE, message=FALSE, fig.align='center'}
+# Bar Chart of Assessment Tools #
+library(ggplot2)
+
+ggplot(PPP, aes(x=freq_assess, fill=mech_vent))+ 
+  geom_bar(position = "dodge") + 
+  scale_fill_manual(values = c("steelblue3", "grey65"))+
+  theme_bw() +
+  theme(legend.title = element_blank(), legend.position ="bottom")+
+  labs(x="Assessment Frequency", y="Count", title="Figure 2: Pain Assessment Frequency")
+
+PPP %>% ggplot(aes(x = freq_assess, group = mech_vent))+
+  geom_bar(aes(y = ..prop.., x = as.factor(freq_assess), fill = mech_vent), stat="count")+
+  scale_y_continuous(labels=scales::percent_format(accuracy = 1L))+
+  scale_x_discrete(guide = guide_axis(angle = 45))+
+  theme_bw()+
+  facet_grid(. ~mech_vent)+
+  theme(legend.position = "none",
+        panel.border = element_blank(),
+        strip.background = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.spacing.x = unit(2, "lines"))+
+  scale_fill_manual(values = c("#abbcea", "#4D81DA"))+
+  labs(x="Assessment Tools", y="Percentage (%)", title="Figure 2: Pain Assessment Frequency")+
+  geom_text(aes( label = scales::percent(..prop.., accuracy = 1L),
+                   y= ..prop..), stat= "count", vjust = -.5, size = 3)
+
+ggsave("Fig2.png", dpi = 300)
+```
+
+\
+\
+
+## Part 4: Pain Management- Opioids
+
+### Part a: Opioid Type
+
+The type of opioid received by either infusion, patient-controlled
+analgesia (PCA) or orally is given by the table below:\
+\
+
+```{r, echo=FALSE,  fig.align='center'}
+# Create Variable of Opioid Infusion
+PPP <- PPP %>% 
+  mutate(Opioidinf = case_when(
+            (intrv_type_morphinf___1 == "Checked") ~ "Morphine",
+            (intrv_type_fentinf___1 == "Checked") ~ "Fentanyl",
+            (intrv_type_hydroinf___1 == "Checked") ~ "Hydromorphone")) %>% 
+ mutate(Opioidinf = fct_explicit_na(Opioidinf, na_level = "None"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(Opioidinf = factor(Opioidinf, levels = c(
+    "Morphine", "Fentanyl", "Hydromorphone", "None")))
+
+# Create Variable of Opioid PCA
+PPP <- PPP %>% 
+  mutate(OpioidPCA = case_when(
+            (pca_type_morph___1 == "Checked") ~ "Morphine",
+            (pca_type_fent___1 == "Checked") ~ "Fentanyl",
+            (pca_type_hydro___1 == "Checked") ~ "Hydromorphone",
+            (pca_type_oxyc___1 == "Checked") ~ "Oxycodone")) %>% 
+ mutate(OpioidPCA = fct_explicit_na(OpioidPCA, na_level = "None"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(OpioidPCA = factor(OpioidPCA, levels = c(
+    "Morphine", "Fentanyl", "Hydromorphone", "Oxycodone", "None")))
+
+# Create Variable of Oral Opioid
+PPP <- PPP %>% 
+  mutate(OpioidPO = case_when(
+            (oral_type_oxy___1 == "Checked") ~ "Oxycodone",
+            (oral_type_oxycod___1 == "Checked") ~ "Oxycodone",
+            (oral_type_targ___1 == "Checked") ~ "Oxycodone",
+            (oral_type_tram___1 == "Checked") ~ "Tramadol",
+            (oral_type_tap___1 == "Checked") ~ "Tapentadol",
+            (oral_type_bup___1 == "Checked") ~ "Buprenorphine",
+            (oral_type_ms___1 == "Checked") ~ "Morphine",
+            (oral_type_ord___1 == "Checked") ~ "Morphine",
+            (oral_type_meth___1 == "Checked") ~ "Methadone",
+            (oral_type_cod___1 == "Checked") ~ "Codeine")) %>% 
+ mutate(OpioidPO = fct_explicit_na(OpioidPO, na_level = "None"))
+
+# Reorder Factor Levels
+PPP <- PPP %>% mutate(OpioidPO = factor(OpioidPO, levels = c(
+    "Oxycodone", "Morphine", "Tapentadol", "Tramadol", "Codeine", "Buprenorphine", "Methadone", "None")))
+
+# Generate Table
+PPP %>% 
+  select(Opioidinf, OpioidPCA, OpioidPO,  mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(Opioidinf="Type of Opioid Infusion",
+                 OpioidPCA="Type of Opioid PCA",
+                 OpioidPO="Type of Oral Opioid"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Opioid Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 4. Opioid Type and Route of Administration**")
+
+```
+
+### Part b: Cumulative Opioid Dose
+
+The cumulative dose of opioid (in Oral Morphine Equivalent Daily Dose
+(oMEDD)) received by either infusion, patient-controlled analgesia (PCA)
+or orally for those that received opioids is given by the table below:\
+\
+
+```{r, echo=FALSE,  message=FALSE, warning=FALSE, fig.align='center'}
+
+# Generate new variables of cumulative doses of each route of opioid
+# Cumulative doses of Separate Opioid Infusions
+
+PPP <- PPP %>% mutate(
+  Morphinf_oMEDD = intrv_dose_morphinf*3,
+  Fentinf_oMEDD = intrv_dose_fentinf/5,
+  Hydroinf_oMEDD = intrv_dose_hydroinf*15,
+  MorphPCA_oMEDD = pca_dose_morph*3,
+  FentPCA_oMEDD = pca_dose_fent/5,
+  HydroPCA_oMEDD = pca_dose_hydro*15,
+  OxyPCA_oMEDD = pca_dose_oxyc*3,
+  OxycontPO_oMEDD = oral_dose_oxy*1.5,
+  OxycodonePO_oMEDD = oral_dose_oxycod*1.5,
+  TargPO_oMEDD = oral_dose_targ*1.5,
+  TramPO_oMEDD = oral_dose_tram/5,
+  TapentPO_oMEDD = oral_dose_tap*0.4,
+  BupPO_oMEDD = oral_dose_bup*0.04,
+  MSContPO_oMEDD = oral_dose_ms,
+  OrdPO_oMEDD = oral_dose_ord,
+  CodPO_oMEDD = oral_dose_cod/7.8) %>% 
+  mutate(OxycodPO_oMEDD = coalesce(OxycontPO_oMEDD, OxycodonePO_oMEDD, TargPO_oMEDD)) %>% 
+  mutate(MorphPO_oMEDD = coalesce(MSContPO_oMEDD, OrdPO_oMEDD))
+
+# Generate Table of Cumulative Opioid Doses for Opioid Infusion
+
+toMEDD1 <- PPP %>% 
+  select(Morphinf_oMEDD, Fentinf_oMEDD, mech_vent) %>% 
+    tbl_summary(by = mech_vent, missing = "no",
+                type = all_continuous() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(Morphinf_oMEDD = "Morphine Infusion",
+                             Fentinf_oMEDD = "Fentanyl Infusion")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Opioid Type & Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 5. Cumulative Doses of Opioid Infusions**")
+
+toMEDD1
+```
+
+\
+\
+
+```{r, echo=FALSE,  message=FALSE, warning=FALSE, fig.align='center'}
+
+# Generate Table of Cumulative Opioid Doses for Opioid PCAs
+
+toMEDD2 <- PPP %>% 
+  select(MorphPCA_oMEDD, FentPCA_oMEDD, HydroPCA_oMEDD, OxyPCA_oMEDD, mech_vent) %>% 
+    tbl_summary(by = mech_vent, missing = "no",
+                type = everything() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(MorphPCA_oMEDD = "Morphine PCA",
+                             FentPCA_oMEDD = "Fentanyl PCA",
+                             HydroPCA_oMEDD = "Hydromorphone PCA",
+                             OxyPCA_oMEDD = "Oxycodone PCA")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Opioid Type & Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 6. Cumulative Doses of Opioid PCAs**")
+
+toMEDD2
+```
+
+\
+\
+
+```{r, echo=FALSE,  message=FALSE, warning=FALSE, fig.align='center'}
+# Generate Table of Cumulative Opioid Doses for Oral Opioid
+
+toMEDD3 <- PPP %>% 
+  select(OxycodPO_oMEDD, MorphPO_oMEDD, TapentPO_oMEDD, TramPO_oMEDD, BupPO_oMEDD, CodPO_oMEDD, mech_vent) %>% 
+    tbl_summary(by = mech_vent, missing = "no",
+                type = everything() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(OxycodPO_oMEDD = "Oxycodone",
+                             TramPO_oMEDD = "Tramadol",
+                             TapentPO_oMEDD = "Tapentadol",
+                             BupPO_oMEDD = "Buprenorphine",
+                             MorphPO_oMEDD = "Morphine",
+                             CodPO_oMEDD = "Codeine")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Opioid Type**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 7. Cumulative Doses of Oral Opioids**")
+
+toMEDD3
+
+```
+
+### Part c: Cumulative Opioid Dose in Mechanically Ventilated Patients
+
+The cumulative dose of opioid (in Oral Morphine Equivalent Daily Dose
+(oMEDD)) received by either infusion, patient-controlled analgesia (PCA)
+or orally for mechanicaaly ventilated patients that received opioids is
+given by the graphs below:\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Opioid Infusion Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+Morphinf<-PPP %>%  filter(mech_vent=="Ventilated") %>% drop_na(Morphinf_oMEDD) %>%  rename(oMEDD = Morphinf_oMEDD) %>% select(oMEDD)
+Fentinf<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(Fentinf_oMEDD) %>% rename(oMEDD = Fentinf_oMEDD) %>% select(oMEDD)
+
+Morphinf$group<- 'Morphine'
+Fentinf$group<- 'Fentanyl'
+
+Opioidinf<- rbind(Morphinf, Fentinf)
+
+ggplot(Opioidinf, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  scale_fill_manual(values = c("steelblue3", "grey65"))+
+  labs(x="Opioid Infusion", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 3: Cumulative Doses of Opioid Infusions", subtitle = "In Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,750))
+
+ggsave("Fig3.png", dpi = 300)
+
+
+```
+
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Opioid PCA Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+MorphPCA<-PPP %>%  filter(mech_vent=="Ventilated") %>% drop_na(MorphPCA_oMEDD) %>% rename(oMEDD = MorphPCA_oMEDD) %>% select(oMEDD)
+FentPCA<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(FentPCA_oMEDD) %>% rename(oMEDD = FentPCA_oMEDD) %>% select(oMEDD)
+HydroPCA<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(HydroPCA_oMEDD) %>% rename(oMEDD = HydroPCA_oMEDD) %>% select(oMEDD)
+OxyPCA<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(OxyPCA_oMEDD) %>% rename(oMEDD = OxyPCA_oMEDD) %>% select(oMEDD)
+
+MorphPCA$group<- 'Morphine'
+FentPCA$group<- 'Fentanyl'
+HydroPCA$group<- 'Hydromorphone'
+OxyPCA$group<- 'Oxycodone'
+
+OpioidPCA<- rbind(MorphPCA, FentPCA, HydroPCA, OxyPCA)
+
+ggplot(OpioidPCA, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  labs(x="Opioid PCA", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 4: Cumulative Doses of Opioid PCAs", subtitle = "In Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,350))
+
+```
+
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Oral Opioid Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+OxycodPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(OxycodPO_oMEDD) %>% rename(oMEDD = OxycodPO_oMEDD) %>% select(oMEDD)
+TramPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(TramPO_oMEDD) %>% rename(oMEDD = TramPO_oMEDD) %>% select(oMEDD)
+TapentPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(TapentPO_oMEDD) %>% rename(oMEDD = TapentPO_oMEDD) %>% select(oMEDD)
+BupPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(BupPO_oMEDD) %>% rename(oMEDD = BupPO_oMEDD) %>% select(oMEDD)
+MorphPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(MorphPO_oMEDD) %>% rename(oMEDD = MorphPO_oMEDD) %>% select(oMEDD)
+CodPO<- PPP %>% filter(mech_vent=="Ventilated") %>% drop_na(CodPO_oMEDD) %>% rename(oMEDD = CodPO_oMEDD) %>% select(oMEDD)
+
+OxycodPO$group<- 'Oxycodone'
+TramPO$group<- 'Tramadol'
+TapentPO$group<- 'Tapentadol'
+BupPO$group<- 'Buprenorphine'
+MorphPO$group<- 'Morphine'
+CodPO$group<- 'Codeine'
+
+OpioidPO<- rbind(OxycodPO, TramPO, TapentPO, BupPO, MorphPO, CodPO)
+
+ggplot(OpioidPO, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  labs(x="Oral Opioid", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 5: Cumulative Doses of Oral Opioid", subtitle = "In Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,70))
+
+```
+
+### Part d: Cumulative Opioid Dose in Non-Mechanically Ventilated Patients
+
+The cumulative dose of opioid (in Oral Morphine Equivalent Daily Dose
+(oMEDD)) received by either infusion, patient-controlled analgesia (PCA)
+or orally for non-mechanicaaly ventilated patients that received opioids
+is given by the table below:\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Opioid Infusion Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+MorphinfNonMV<-PPP %>%  filter(mech_vent=="Non-Ventilated") %>% drop_na(Morphinf_oMEDD) %>%  rename(oMEDD = Morphinf_oMEDD) %>% select(oMEDD)
+FentinfNonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(Fentinf_oMEDD) %>% rename(oMEDD = Fentinf_oMEDD) %>% select(oMEDD)
+
+MorphinfNonMV$group<- 'Morphine'
+FentinfNonMV$group<- 'Fentanyl'
+
+OpioidinfNonMV<- rbind(MorphinfNonMV, FentinfNonMV)
+
+ggplot(OpioidinfNonMV, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  scale_fill_manual(values = c("steelblue3", "grey65"))+
+  labs(x="Opioid Infusion", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 6: Cumulative Doses of Opioid Infusions", subtitle = "In Non-Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,300))
+
+```
+
+\
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Opioid PCA Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+MorphPCANonMV<-PPP %>%  filter(mech_vent=="Non-Ventilated") %>% drop_na(MorphPCA_oMEDD) %>% rename(oMEDD = MorphPCA_oMEDD) %>% select(oMEDD)
+FentPCANonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(FentPCA_oMEDD) %>% rename(oMEDD = FentPCA_oMEDD) %>% select(oMEDD)
+HydroPCANonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(HydroPCA_oMEDD) %>% rename(oMEDD = HydroPCA_oMEDD) %>% select(oMEDD)
+OxyPCANonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(OxyPCA_oMEDD) %>% rename(oMEDD = OxyPCA_oMEDD) %>% select(oMEDD)
+
+MorphPCANonMV$group<- 'Morphine'
+FentPCANonMV$group<- 'Fentanyl'
+HydroPCANonMV$group<- 'Hydromorphone'
+OxyPCANonMV$group<- 'Oxycodone'
+
+OpioidPCANonMV<- rbind(MorphPCANonMV, FentPCANonMV, HydroPCANonMV, OxyPCANonMV)
+
+positions<-c("Oxycodone", "Morphine", "Fentanyl", "Hydromorphone")
+ggplot(OpioidPCANonMV, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  labs(x="Opioid PCA", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 7: Cumulative Doses of Opioid PCAs", subtitle = "In Non-Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,400))+
+  scale_x_discrete(limits=positions)
+
+```
+
+\
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Oral Opioid Doses
+
+# Wrangle Data Frames to allow box plot of varying lengths
+OxycodPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(OxycodPO_oMEDD) %>% rename(oMEDD = OxycodPO_oMEDD) %>% select(oMEDD)
+TramPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(TramPO_oMEDD) %>% rename(oMEDD = TramPO_oMEDD) %>% select(oMEDD)
+TapentPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(TapentPO_oMEDD) %>% rename(oMEDD = TapentPO_oMEDD) %>% select(oMEDD)
+BupPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(BupPO_oMEDD) %>% rename(oMEDD = BupPO_oMEDD) %>% select(oMEDD)
+MorphPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(MorphPO_oMEDD) %>% rename(oMEDD = MorphPO_oMEDD) %>% select(oMEDD)
+CodPONonMV<- PPP %>% filter(mech_vent=="Non-Ventilated") %>% drop_na(CodPO_oMEDD) %>% rename(oMEDD = CodPO_oMEDD) %>% select(oMEDD)
+
+OxycodPONonMV$group<- 'Oxycodone'
+TramPONonMV$group<- 'Tramadol'
+TapentPONonMV$group<- 'Tapentadol'
+BupPONonMV$group<- 'Buprenorphine'
+MorphPONonMV$group<- 'Morphine'
+CodPONonMV$group<- 'Codeine'
+
+OpioidPONonMV<- rbind(OxycodPONonMV, TramPONonMV, TapentPONonMV, BupPONonMV, MorphPONonMV, CodPONonMV)
+
+positions<-c("Oxycodone", "Morphine", "Tapentadol", "Tramadol", "Buprenorphine", "Codeine")
+ggplot(OpioidPONonMV, aes(x=group, y=oMEDD)) +
+  geom_boxplot(position="dodge", outlier.shape=NA)+
+  labs(x="Oral Opioid", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 8: Cumulative Doses of Oral Opioid", subtitle = "In Non-Mechanically Ventilated Patients")+
+  coord_cartesian(y = c(0,70))+
+  scale_x_discrete(limits=positions)
+
+```
+
+### Part e: Cumulative Total Opioid Dose in All Patients
+
+The total cumulative dose of opioid (in Oral Morphine Equivalent Daily
+Dose (oMEDD)) for patients that received opioids is given by the table
+below:\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+
+# Generate new variable of oMEDD for IV & PO opioids
+
+PPP2 <- PPP %>% select(oral_dose_oxy:pca_dose_peth, -oral_dose_other, -intrv_dose_other, mech_vent, postop, pain_assessed) %>% 
+  select(contains('dose'), mech_vent, postop, pain_assessed) %>% 
+  mutate_if(is.numeric , replace_na, replace = 0) %>% 
+    mutate(OpioidIV_Tot_oMEDD = intrv_dose_morphbol*3 + intrv_dose_morphinf*3 + intrv_dose_fentbol/5
+                                          + intrv_dose_fentinf/5 + intrv_dose_hydrobol*15 +
+                                          intrv_dose_hydroinf*15 + intrv_dose_oxyc*3 + intrv_dose_trama/5 +
+                                          pca_dose_morph*3 + pca_dose_fent/5 + pca_dose_hydro*15 + 
+                                          pca_dose_oxyc*3,
+         OpioidPO_Tot_oMEDD = oral_dose_oxy*1.5 + oral_dose_oxycod*1.5 + oral_dose_targ*1.5 +
+                                          oral_dose_tram/5 + oral_dose_tap*0.4 + oral_dose_bup*0.04 +
+                                          oral_dose_ms + oral_dose_ord + oral_dose_cod/7.8,
+         Opioid_oMEDD_Tot = OpioidIV_Tot_oMEDD + OpioidPO_Tot_oMEDD)
+
+PPP_IV <- PPP2 %>% filter(OpioidIV_Tot_oMEDD>0) %>% rename(oMEDD = OpioidIV_Tot_oMEDD) %>% select(oMEDD, mech_vent, postop)
+PPP_PO <- PPP2 %>% filter(OpioidPO_Tot_oMEDD>0 )%>% rename(oMEDD = OpioidPO_Tot_oMEDD) %>% select(oMEDD, mech_vent, postop)
+PPP_Tot <- PPP2 %>% filter(Opioid_oMEDD_Tot>0) %>% rename(oMEDD = Opioid_oMEDD_Tot) %>% select(oMEDD, mech_vent, postop)
+
+# Generate table of total oMEDD 
+t1 <-
+  PPP_IV %>%
+  select(oMEDD, mech_vent) %>%
+  tbl_summary(by = mech_vent, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Parenteral Opioid")) %>% 
+  modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  add_n()
+
+t2 <-
+  PPP_PO %>%
+  select(oMEDD, mech_vent) %>%
+  tbl_summary(by = mech_vent, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Oral Opioid")) %>% 
+  modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  add_n()
+
+t3 <-
+  PPP_Tot %>%
+  select(oMEDD, mech_vent) %>%
+  tbl_summary(by = mech_vent, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Total Opioid")) %>% 
+  modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  add_n()
+
+tbl_stack(list(t1, t2, t3)) %>% 
+  modify_header(list(
+    label ~"**Opioid Route**"))%>% 
+  modify_caption("**Table 8. Cumulative Doses of Opioids**")
+```
+
+\
+\
+\
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+# Generate Graph of Total oMEDD
+
+PPP_PO$group<- 'Oral Opioid'
+PPP_IV$group<- 'Parenteral Opioid'
+PPP_Tot$group<- 'Total Opioid'
+
+
+TotalOpioid<- rbind(PPP_PO, PPP_IV, PPP_Tot)
+
+ggplot(TotalOpioid, aes(x=group, y=oMEDD, fill=mech_vent)) +
+  geom_boxplot(outlier.shape=NA)+
+  scale_fill_manual(values = c("#abbcea", "#4D81DA"))+
+  labs(x=" ", y="Cumulative Daily Opioid Dose (oMEDD)", title="Figure 4: Cumulative Doses of Opioids", subtitle = "In Patients That Received Opioids", fill="Ventilation Status")+
+  theme_bw()+
+  coord_cartesian(y = c(0,800))
+
+ggsave("Fig4.png", dpi = 300)
+
+```
+
+## Part 5: Pain Management- Simple Analgesia
+
+The type of simple analgesia (Paracetamol and NSAIDs) is given by the
+table below:\
+\
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+
+# Create Table of Oral Simple Analgesia
+tsimp1<- PPP %>% 
+  select(oral_type_para___1, oral_type_ibup___1, oral_type_ketor___1, oral_type_napro___1, oral_type_dicon___1,
+         oral_type_melox___1, oral_type_celec___1, oral_type_indom___1, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(oral_type_para___1 = "Paracetamol",
+                             oral_type_ibup___1 = "Ibuprofen",
+                             oral_type_ketor___1 = "Ketorolac",
+                             oral_type_napro___1 = "Naproxen",
+                             oral_type_dicon___1 = "Diclofenac",
+                             oral_type_melox___1 = "Meloxicam",
+                             oral_type_celec___1 = "Celecoxib",
+                             oral_type_indom___1 = "Indomethacin"),
+               value = list(oral_type_para___1 ~ "Checked",
+                            oral_type_ibup___1 ~ "Checked",
+                            oral_type_ketor___1 ~ "Checked",
+                            oral_type_napro___1 ~ "Checked",
+                            oral_type_dicon___1 ~ "Checked",
+                            oral_type_melox___1 ~ "Checked",
+                            oral_type_celec___1 ~ "CChecked",
+                            oral_type_indom___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Simple Analgesic**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+
+# Create Table of IV Simple Analgesia
+
+
+tsimp2 <- PPP %>% 
+  select(intrv_type_parac___1, intrv_type_ibu___1,
+         intrv_type_ket___1, intrv_type_paracox___1, intrv_type_indom___1,  mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(intrv_type_parac___1 = "Paracetamol",
+                             intrv_type_ibu___1 = "Ibuprofen",
+                             intrv_type_ket___1 = "Ketorlac",
+                             intrv_type_paracox___1 = "Parecoxib",
+                             intrv_type_indom___1 = "Indomethacin"),
+               value = list(intrv_type_parac___1 ~ "Checked",
+                            intrv_type_ibu___1 ~ "Checked",
+                            intrv_type_ket___1 ~ "Checked",
+                            intrv_type_paracox___1 ~ "Checked",
+                            intrv_type_indom___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Simple Analgesic**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+
+# Stack the Two tables
+tbl_stack(list(tsimp1, tsimp2),
+  group_header = c("Oral Analgesia", "IV Analgesia")) %>% 
+  modify_caption("**Table 9. Simple Analgesia**")
+
+```
+
+\
+\
+
+## Part 6: Pain Management- Adjunct Analgesia
+
+The type of analgesia adjuncts (Ketamine and Regional Analgesia) is
+given by the table below:\
+\
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+
+# Generate Ketamine Table First
+tadj1 <- PPP %>% 
+  select(intrv_type_ketinf___1, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(intrv_type_ketinf___1 = "Ketmine Infusion"),
+                value = list(intrv_type_ketinf___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+
+# Generate Regional Analgesia Table
+tadj2 <- PPP %>% 
+  select(regional_route___1, regional_route___2, regional_route___3, regional_route___4, regional_route___5, regional_route___6, regional_route___7, regional_route___8, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(regional_route___1 = "Thoracic Epidural",
+                            regional_route___2 = "Lumbar Epidural",
+                            regional_route___3 = "Transversus Abdominus Plane Block",
+                            regional_route___4 = "Wound Catheter",
+                            regional_route___5 = "Paravertebral Block",
+                            regional_route___6 = "Extrapleural Block",
+                            regional_route___7 = "Brachial Plexus Block",
+                            regional_route___8 = "Lower Limb Block"),
+                value = list(regional_route___1 ~ "Checked",
+                            regional_route___2 ~ "Checked",
+                            regional_route___3 ~ "Checked",
+                            regional_route___4 ~ "Checked",
+                            regional_route___5 ~ "Checked",
+                            regional_route___6 ~ "Checked",
+                            regional_route___7 ~ "CChecked",
+                            regional_route___8 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+
+# Stack Table
+tbl_stack(list(tadj1, tadj2),
+  group_header = c(" ", "Regional Analgesia")) %>% 
+  modify_caption("**Table 10. Adjuvant Analgesia**")
+```
+
+\
+\
+
+## Part 7: Pain Management- Anti-Neuropathic Analgesia
+
+The type of anti-neuropathic analgesia adjuncts is given by the table
+below:\
+\
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+PPP %>% 
+  select(anti_neuropath___1, anti_neuropath___2, anti_neuropath___3, anti_neuropath___4, anti_neuropath___5, anti_neuropath___6, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(anti_neuropath___1 = "Gabapentin",
+                            anti_neuropath___2 = "Pregabalin",
+                            anti_neuropath___3 = "Carbamazepine",
+                            anti_neuropath___4 = "Valproate",
+                            anti_neuropath___5 = "Amitriptylline",
+                            anti_neuropath___6 = "Lignocaine Infusion"),
+                value = list(anti_neuropath___1 ~ "Checked",
+                            anti_neuropath___2 ~ "Checked",
+                            anti_neuropath___3 ~ "Checked",
+                            anti_neuropath___4 ~ "Checked",
+                            anti_neuropath___5 ~ "Checked",
+                            anti_neuropath___6 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Anti-Neuropathic Agent**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 11. Anti-Neuropathic Agents**")
+
+```
+
+## Part 8: Pain Management- Post-Operative vs Non-Operative Cohort
+
+### Part a: Demographics
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+# Change Name of Post-Op Responses
+PPP <- PPP %>% mutate(postop = case_when(
+                (postop == "No") ~ "Non-Operative",
+                (postop == "Yes") ~ "Post-Operative"))
+
+# Generate Demographic Table
+
+PPP %>% 
+  select(age, gender, apacheiiscore, apache3, admit_source, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>% 
+    tbl_summary(by = postop,
+                missing = "no",
+                label = list(age="Age (Years)",
+                 gender="Sex",
+                 apacheiiscore="APACHE2 Score",
+                 apache3="Admission Diagnosis",
+                 admit_source="Admission Source"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)"))  %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 12. Patient Demographics in Post-Operative Vs Non-Operative**")
+  )
+
+```
+
+### Part b: Pain Assessment Tools
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Generate Table of Assessment Tools in Post-Op Vs Non Post-Op Pts
+PPP %>% 
+  select(Assesstool, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>% 
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(Assesstool="Pain Assessment Tool"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>%
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()%>%
+  modify_caption("**Table 13. Pain Assessment Tools in Post-Operative Vs Non-Operative**") 
+  )
+
+```
+
+###   Part b.1. Comparison of Pain Assessment Tools in Post-Operative and Non-Operative Groups in Each Ventilation Strata  
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+library(broom)
+
+# Omnibus Test for Differences in Assessment Tool Type Each Group (Ventilated and Non-Ventilated)
+# Ventilated Pts
+PPPVent <- PPP %>% filter(mech_vent == "Ventilated")
+AssToolVent <- tidy(chisq.test(PPPVent$Assesstool, PPPVent$postop))  %>% mutate(Comparator = "Assessment Tool (Ventilated)")   
+
+# Non-Ventilated Pts
+PPPNonVent <- PPP %>% filter(mech_vent == "Non-Ventilated")
+AssToolNonVent <- tidy(chisq.test(PPPNonVent$Assesstool, PPPNonVent$postop))  %>% mutate(Comparator = "Assessment Tool (Non-Vent)")    
+
+TotalAssessToolComparison <- rbind(AssToolVent,AssToolNonVent) %>% select(Comparator, p.value)
+
+rmarkdown::paged_table(TotalAssessToolComparison)
+
+```
+
+###   Part c: Pain Assessment Frequency
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Generate Table of Assessment Frequency in Post-Op Vs Non Post-Op Pts
+PPP %>% 
+  select(freq_assess, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>% 
+      tbl_summary(by = postop, ,missing = "no",
+                label = list(freq_assess="Pain Assessment Frequency"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>%
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()%>%
+  modify_caption("**Table 14. Pain Assessment Frequency in Post-Operative Vs Non-Operative**") 
+)
+
+```
+
+###   Part c.1. Comparison of Pain Assessment Frequency in Post-Operative and Non-Operative Groups in Each Ventilation Strata  
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+# Omnibus Test for Differences in Assessment Frequency Each Group (Ventilated and Non-Ventilated)
+# Ventilated Pts
+AssFreqVent <- tidy(chisq.test(PPPVent$freq_assess, PPPVent$postop))  %>% mutate(Comparator = "Assessment Freq (Ventilated)")   
+AssFreqMV.Table <- table(Frequency = PPPVent$freq_assess, Op = PPPVent$postop)
+
+# Non-Ventilated Pts
+AssFreqNonVent <- tidy(chisq.test(PPPNonVent$freq_assess, PPPNonVent$postop))  %>% mutate(Comparator = "Assessment Freq (Non-Vent)")    
+AssFreqNonMV.Table <- table(Frequency = PPPNonVent$freq_assess, Op = PPPNonVent$postop)
+
+TotalAssessFreqComparison <- rbind(AssFreqVent,AssFreqNonVent) %>% select(Comparator, p.value)
+
+rmarkdown::paged_table(TotalAssessFreqComparison)
+```
+
+###   Part d: Pain Management- Opioid Type
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Generate Table of Assessment Frequency in Post-Op Vs Non Post-Op Pts
+PPP %>% 
+  select(Opioidinf, OpioidPCA, OpioidPO,  mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(Opioidinf="Type of Opioid Infusion",
+                 OpioidPCA="Type of Opioid PCA",
+                 OpioidPO="Type of Oral Opioid"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+  modify_header(list(
+    label ~"**Opioid Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 15. Opioid Type and Route of Administration in Post-Operative Vs Non-Operative**")
+  )
+
+
+
+```
+
+###   Part d.1. Comparison of Type of Opioid in Post-Operative and Non-Operative Groups in Each Ventilation Strata  
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+# Omnibus Test for Differences in Opioid Infusion Type in Each Group (Ventilated and Non-Ventilated)
+# Opioid Infusion
+# Ventilated Pts
+OpioidInfTypeVent <- tidy(chisq.test(PPPVent$Opioidinf, PPPVent$postop))%>% mutate(Comparator = "Opioid Inf (Vent)")      
+
+# Non-Ventilated Pts
+OpioidInfTypeNonVent <- tidy(chisq.test(PPPNonVent$Opioidinf, PPPNonVent$postop))%>% mutate(Comparator = "Opioid Inf (Non-Vent)")     
+
+# Opioid PCA
+# Ventilated Pts
+OpioidPCATypeVent <- tidy(chisq.test(PPPVent$OpioidPCA, PPPVent$postop))%>% mutate(Comparator = "Opioid PCA (Vent)")      
+
+# Non-Ventilated Pts
+OpioidPCATypeNonVent <- tidy(chisq.test(PPPNonVent$OpioidPCA, PPPNonVent$postop))%>% mutate(Comparator = "Opioid PCA (Non-Vent)")     
+
+# PO Opioid
+# Ventilated Pts
+OpioidPOTypeVent <- tidy(chisq.test(PPPVent$OpioidPO, PPPVent$postop))%>% mutate(Comparator = "Oral Opioid (Vent)")      
+
+# Non-Ventilated Pts
+OpioidPOTypeNonVent <- tidy(chisq.test(PPPNonVent$OpioidPO, PPPNonVent$postop))%>% mutate(Comparator = "Oral Opioid (Non-Vent)")    
+
+OpioidTypeComparison <- rbind(OpioidInfTypeVent, OpioidInfTypeNonVent, OpioidPCATypeVent, OpioidPCATypeNonVent, OpioidPOTypeVent, OpioidPOTypeNonVent) %>% select(Comparator, p.value) %>%  as.data.frame() %>% format(scientific=FALSE)
+
+rmarkdown::paged_table(OpioidTypeComparison)
+  
+```
+
+###   Part e: Pain Management- Cumulative Opioid Dose
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+PPP %>% 
+  select(Morphinf_oMEDD, Fentinf_oMEDD, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+  tbl_summary(by = postop, missing = "no",
+                type = everything() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(Morphinf_oMEDD = "Morphine Infusion",
+                             Fentinf_oMEDD = "Fentanyl Infusion")) %>% 
+  modify_header(list(
+    label ~"**Opioid Type & Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 16. Cumulative Doses of Opioid Infusions in Post-Operative Vs Non-Operative**")
+  )
+```
+
+###   Part e.1. Comparison of Dose of Opioid in Post-Operative and Non-Operative Groups in Each Ventilation Strata  
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+library(broom)
+# Test for Differences in Opioid Infusion Type in Each Group (Ventilated and Non-Ventilated)
+# Opioid Infusion- Morphine
+# Ventilated Pts
+Inf1 <- tidy(wilcox.test(PPPVent$Morphinf_oMEDD ~ PPPVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Morphine Infusion (Vent)") 
+
+# Non-Ventilated Pts
+Inf2 <- tidy(wilcox.test(PPPNonVent$Morphinf_oMEDD ~ PPPNonVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Morphine Infusion (Non-Vent)") 
+
+# Opioid Infusion- Fentanyl
+# Ventilated Pts
+Inf3 <- tidy(wilcox.test(PPPVent$Fentinf_oMEDD ~ PPPVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Fentanyl Infusion (Vent)")  
+
+# Non-Ventilated Pts
+Inf4 <- tidy(wilcox.test(PPPNonVent$Fentinf_oMEDD ~ PPPNonVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Fentanyl Infusion (Non-Vent)")   
+
+TableInf <- rbind(Inf1, Inf2, Inf3, Inf4) %>% select(Comparator, p.value, conf.low, conf.high)
+
+rmarkdown::paged_table(TableInf)
+```
+
+\
+\
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+PPP %>% 
+  select(MorphPCA_oMEDD, FentPCA_oMEDD, HydroPCA_oMEDD, OxyPCA_oMEDD, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, missing = "no",
+                type = everything() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(MorphPCA_oMEDD = "Morphine PCA",
+                             FentPCA_oMEDD = "Fentanyl PCA",
+                             HydroPCA_oMEDD = "Hydromorphone PCA",
+                             OxyPCA_oMEDD = "Oxycodone PCA")) %>% 
+  modify_header(list(
+    label ~"**Opioid Type & Route**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 17. Cumulative Doses of Opioid PCAs in Post-Operative Vs Non-Operative**")
+  )
+```
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+PPP %>% 
+  select(OxycodPO_oMEDD, MorphPO_oMEDD, TapentPO_oMEDD, TramPO_oMEDD, BupPO_oMEDD, CodPO_oMEDD, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, missing = "no",
+                type = everything() ~ "continuous2",
+                statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+                digits = all_continuous() ~ 1,
+                label = list(OxycodPO_oMEDD = "Oxycodone",
+                             TramPO_oMEDD = "Tramadol",
+                             TapentPO_oMEDD = "Tapentadol",
+                             BupPO_oMEDD = "Buprenorphine",
+                             MorphPO_oMEDD = "Morphine",
+                             CodPO_oMEDD = "Codeine")) %>%
+  modify_header(list(
+    label ~"**Opioid Type**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>%
+  modify_caption("**Table 18. Cumulative Doses of Oral Opioid in Post-Operative Vs Non-Operative**")
+  )
+```
+
+### Part f: Pain Management- Cumulative Total Opioid Dose
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Generate table of total oMEDD 
+tIVPostOp <-
+  PPP_IV %>%
+  select(oMEDD, mech_vent, postop) %>%
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+  tbl_summary(by = postop, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Parenteral Opioid")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+t2POPostOp <-
+  PPP_PO %>%
+  select(oMEDD, mech_vent, postop) %>%
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+  tbl_summary(by = postop, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Oral Opioid")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+t3TotPostOp <-
+  PPP_Tot %>%
+  select(oMEDD, mech_vent, postop) %>%
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+  tbl_summary(by = postop, missing = "no",
+              type = everything() ~ "continuous2",
+              statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})"),
+              digits = all_continuous() ~ 1,
+              label = list(oMEDD = "Total Opioid")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() 
+  )
+
+tbl_stack(list(tIVPostOp, t2POPostOp, t3TotPostOp)) %>% 
+  modify_header(list(
+    label ~"**Opioid Route**"))%>% 
+  modify_caption("**Table 19. Cumulative Doses of Opioids in Post-Operative Vs Non-Operative**")
+
+```
+
+\
+\
+
+### Part f.1. Comparison of Dose of Opioid in Post-Operative and Non-Operative Groups in Each Ventilation Strata
+
+\
+\
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+library(broom)
+# Test for Differences in Opioid Infusion Type in Each Group (Ventilated and Non-Ventilated)
+# Parenteral Opioid
+# Ventilated Pts
+PPPIVVent <- PPP_IV %>% filter(mech_vent == "Ventilated")
+PPPIVNonVent <- PPP_IV %>% filter(mech_vent == "Non-Ventilated")
+
+Par1 <- tidy(wilcox.test(PPPIVVent$oMEDD ~ PPPIVVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Parenteral Opioid (Vent)") 
+
+# Non-Ventilated Pts
+Par2 <- tidy(wilcox.test(PPPIVNonVent$oMEDD ~ PPPIVNonVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Parenteral Opioid (Non-Vent)") 
+
+# Oral Opioid
+# Ventilated Pts
+PPPPOVent <- PPP_PO %>% filter(mech_vent == "Ventilated")
+PPPPONonVent <- PPP_PO %>% filter(mech_vent == "Non-Ventilated")
+
+Or1 <- tidy(wilcox.test(PPPPOVent$oMEDD ~ PPPPOVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Oral Opioid (Vent)")  
+
+# Non-Ventilated Pts
+Or2 <- tidy(wilcox.test(PPPPONonVent$oMEDD ~ PPPPONonVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Oral Opioid (Non-Vent)")  
+
+# Total Opioid
+# Ventilated Pts
+PPPTotVent <- PPP_Tot %>% filter(mech_vent == "Ventilated")
+PPPTotNonVent <- PPP_Tot %>% filter(mech_vent == "Non-Ventilated")
+Tot1 <- tidy(wilcox.test(PPPTotVent$oMEDD ~ PPPTotVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Total Opioid (Vent)")  
+
+# Non-Ventilated Pts
+Tot2 <- tidy(wilcox.test(PPPTotNonVent$oMEDD ~ PPPTotNonVent$postop, paired = FALSE, conf.int = TRUE)) %>% mutate(Comparator = "Total Opioid (Non-Vent)") 
+
+TotalOpioidComparison <- rbind(Par1, Par2, Or1, Or2, Tot1, Tot2) %>% select(Comparator, p.value, conf.low, conf.high)
+
+rmarkdown::paged_table(TotalOpioidComparison)
+```
+
+\
+\
+
+### Part g: Pain Management- Simple Analgesia
+
+The type of simple analgesia (Paracetamol and NSAIDs) is given by the
+table below:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+
+# Create Table of Oral Simple Analgesia
+tsimp1PostOp<- PPP %>% 
+  select(oral_type_para___1, oral_type_ibup___1, oral_type_ketor___1, oral_type_napro___1, oral_type_dicon___1,
+         oral_type_melox___1, oral_type_celec___1, oral_type_indom___1, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(oral_type_para___1 = "Paracetamol",
+                             oral_type_ibup___1 = "Ibuprofen",
+                             oral_type_ketor___1 = "Ketorolac",
+                             oral_type_napro___1 = "Naproxen",
+                             oral_type_dicon___1 = "Diclofenac",
+                             oral_type_melox___1 = "Meloxicam",
+                             oral_type_celec___1 = "Celecoxib",
+                             oral_type_indom___1 = "Indomethacin"),
+               value = list(oral_type_para___1 ~ "Checked",
+                            oral_type_ibup___1 ~ "Checked",
+                            oral_type_ketor___1 ~ "Checked",
+                            oral_type_napro___1 ~ "Checked",
+                            oral_type_dicon___1 ~ "Checked",
+                            oral_type_melox___1 ~ "Checked",
+                            oral_type_celec___1 ~ "CChecked",
+                            oral_type_indom___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Simple Analgesic**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+# Create Table of IV Simple Analgesia
+
+
+tsimp2PostOp <- PPP %>% 
+  select(intrv_type_parac___1, intrv_type_ibu___1,
+         intrv_type_ket___1, intrv_type_paracox___1, intrv_type_indom___1,  mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(intrv_type_parac___1 = "Paracetamol",
+                             intrv_type_ibu___1 = "Ibuprofen",
+                             intrv_type_ket___1 = "Ketorlac",
+                             intrv_type_paracox___1 = "Parecoxib",
+                             intrv_type_indom___1 = "Indomethacin"),
+               value = list(intrv_type_parac___1 ~ "Checked",
+                            intrv_type_ibu___1 ~ "Checked",
+                            intrv_type_ket___1 ~ "Checked",
+                            intrv_type_paracox___1 ~ "Checked",
+                            intrv_type_indom___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Simple Analgesic**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+# Stack the Two tables
+tbl_stack(list(tsimp1PostOp, tsimp2PostOp),
+  group_header = c("Oral Analgesia", "IV Analgesia")) %>% 
+  modify_caption("**Table 20. Simple Analgesia in Post-Operative Vs Non-Operative**")
+
+```
+
+\
+\
+
+### Part h: Pain Management- Adjunct Analgesia
+
+The type of analgesia adjuncts (Ketamine and Regional Analgesia) is
+given by the table below:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+
+# Generate Ketamine Table First
+tadj1PostOp <- PPP %>% 
+  select(intrv_type_ketinf___1, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(intrv_type_ketinf___1 = "Ketmine Infusion"),
+                value = list(intrv_type_ketinf___1 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+# Generate Regional Analgesia Table
+tadj2PostOp <- PPP %>% 
+  select(regional_route___1, regional_route___2, regional_route___3, regional_route___4, regional_route___5, regional_route___6, regional_route___7, regional_route___8, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(regional_route___1 = "Thoracic Epidural",
+                            regional_route___2 = "Lumbar Epidural",
+                            regional_route___3 = "Transversus Abdominus Plane Block",
+                            regional_route___4 = "Wound Catheter",
+                            regional_route___5 = "Paravertebral Block",
+                            regional_route___6 = "Extrapleural Block",
+                            regional_route___7 = "Brachial Plexus Block",
+                            regional_route___8 = "Lower Limb Block"),
+                value = list(regional_route___1 ~ "Checked",
+                            regional_route___2 ~ "Checked",
+                            regional_route___3 ~ "Checked",
+                            regional_route___4 ~ "Checked",
+                            regional_route___5 ~ "Checked",
+                            regional_route___6 ~ "Checked",
+                            regional_route___7 ~ "CChecked",
+                            regional_route___8 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall()
+  )
+
+# Stack Table
+tbl_stack(list(tadj1PostOp, tadj2PostOp),
+  group_header = c(" ", "Regional Analgesia")) %>% 
+  modify_caption("**Table 21. Adjuvant Analgesia in Post-Operative Vs Non-Operative**")
+```
+
+### Part i: Pain Management- Anti-Neuropathic Analgesia
+
+The type of anti-neuropathic analgesia adjuncts is given by the table
+below:\
+\
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+PPP %>% 
+  select(anti_neuropath___1, anti_neuropath___2, anti_neuropath___3, anti_neuropath___4, anti_neuropath___5, anti_neuropath___6, mech_vent, postop) %>% 
+  mutate(mech_vent = paste(mech_vent)) %>%
+  tbl_strata(
+    strata = mech_vent,
+    .tbl_fun =
+      ~ .x %>%
+    tbl_summary(by = postop, ,missing = "no",
+                label = list(anti_neuropath___1 = "Gabapentin",
+                            anti_neuropath___2 = "Pregabalin",
+                            anti_neuropath___3 = "Carbamazepine",
+                            anti_neuropath___4 = "Valproate",
+                            anti_neuropath___5 = "Amitriptylline",
+                            anti_neuropath___6 = "Lignocaine Infusion"),
+                value = list(anti_neuropath___1 ~ "Checked",
+                            anti_neuropath___2 ~ "Checked",
+                            anti_neuropath___3 ~ "Checked",
+                            anti_neuropath___4 ~ "Checked",
+                            anti_neuropath___5 ~ "Checked",
+                            anti_neuropath___6 ~ "Checked"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+  modify_header(list(
+    label ~"**Anti-Neuropathic Agent**")) %>% 
+  bold_labels() %>% 
+  italicize_levels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 22. Anti-Neuropathic Agents in Post-Operative Vs Non-Operative**")
+  )
+
+```
+
+\
+
+### Part j. Comparison of All Analgesic Adjuncts in Post-Operative and Non-Operative Groups in Each Ventilation Strata
+
+\
+\
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+library(broom)
+# Generate Required Variables for Chi-Squared Tests
+# Simple Analgesia
+# Paracetamol
+PPP <- PPP %>% 
+  mutate(Paracetamol = case_when(
+    (intrv_type_parac___1 == "Checked") ~ "Yes",
+    (oral_type_para___1 == "Checked") ~ "Yes")) %>% 
+ mutate(Paracetamol = fct_explicit_na(Paracetamol, na_level = "No"))
+
+#NSAIDs
+PPP <- PPP %>% 
+  mutate(NSAID = case_when(
+    (oral_type_ibup___1 == "Checked") ~ "Yes",
+    (oral_type_ketor___1 == "Checked") ~ "Yes",
+    (oral_type_napro___1 == "Checked") ~ "Yes",
+    (oral_type_dicon___1 == "Checked") ~ "Yes",
+    (oral_type_melox___1 == "Checked") ~ "Yes",
+    (oral_type_celec___1 == "Checked") ~ "Yes",
+    (oral_type_indom___1 == "Checked") ~ "Yes",
+    (intrv_type_ibu___1 == "Checked") ~ "Yes",
+    (intrv_type_ket___1 == "Checked") ~ "Yes",
+    (intrv_type_paracox___1 == "Checked") ~ "Yes",
+    (intrv_type_indom___1 == "Checked") ~ "Yes",
+    )) %>% 
+ mutate(NSAID = fct_explicit_na(NSAID, na_level = "No"))
+
+# Anti-Neuropathic Agents
+PPP <- PPP %>% 
+  mutate(Anti_Neuro = case_when(
+    (anti_neuropath___1 == "Checked") ~ "Yes",
+    (anti_neuropath___2 == "Checked") ~ "Yes",
+    (anti_neuropath___3 == "Checked") ~ "Yes",
+    (anti_neuropath___4 == "Checked") ~ "Yes",
+    (anti_neuropath___5 == "Checked") ~ "Yes",
+    (anti_neuropath___6 == "Checked") ~ "Yes")) %>% 
+ mutate(Anti_Neuro = fct_explicit_na(Anti_Neuro, na_level = "No"))
+
+    
+PPPVent <- PPP %>% filter(mech_vent == "Ventilated")
+PPPNonVent <- PPP %>% filter(mech_vent == "Non-Ventilated")
+ 
+
+# Test for Differences in Simple Analgesia Type in Each Group (Ventilated and Non-Ventilated)
+# Paracetamol
+# Ventilated Pts
+Para1 <- tidy(chisq.test(PPPVent$Paracetamol, PPPVent$postop == "Post-Operative")) %>% mutate(Comparator = "Paracetamol (Vent)")
+ParaVent.Table <- table(Paracetamol = PPPVent$Paracetamol, Op = PPPVent$postop)
+
+# Non-Ventilated Pts
+Para2 <- tidy(chisq.test(PPPNonVent$Paracetamol, PPPNonVent$postop == "Non-Operative")) %>% mutate(Comparator = "Paracetamol (Non-Vent)") 
+ParaNonVent.Table <- table(Paracetamol = PPPNonVent$Paracetamol, Op = PPPNonVent$postop)
+
+# NSAIDS
+#Ventilated 
+NSAID1 <- tidy(chisq.test(PPPVent$NSAID, PPPVent$postop == "Post-Operative")) %>% mutate(Comparator = "NSAIDs (Vent)") 
+
+# Non-Ventilated Pts
+NSAID2 <- tidy(chisq.test(PPPNonVent$NSAID, PPPNonVent$postop == "Non-Operative")) %>% mutate(Comparator = "NSAIDs (Non-Vent)") 
+
+# Test for Differences in Ketamine in Each Group (Ventilated and Non-Ventilated)
+# Ventilated Pts
+Ket1 <- tidy(chisq.test(PPPVent$intrv_type_ketinf___1, PPPVent$postop == "Post-Operative")) %>% mutate(Comparator = "Ketamine (Vent)")  
+
+# Non-Ventilated Pts
+Ket2 <- tidy(chisq.test(PPPNonVent$intrv_type_ketinf___1, PPPNonVent$postop == "Non-Operative")) %>% mutate(Comparator = "Ketamine (Non-Vent)")  
+
+# Test for Differences in Regional Analgesia in Each Group (Ventilated and Non-Ventilated)
+# Ventilated Pts
+RA1 <- tidy(chisq.test(PPPVent$regional_anaesth, PPPVent$postop == "Post-Operative")) %>% mutate(Comparator = "Regional Analgesia (Vent)")  
+
+# Non-Ventilated Pts
+RA2 <- tidy(chisq.test(PPPNonVent$regional_anaesth, PPPNonVent$postop == "Non-Operative")) %>% mutate(Comparator = "Regional Analgesia (Vent)")  
+
+# Test for Differences in Anti-Neuropathic Medications in Each Group (Ventilated and Non-Ventilated)
+# Ventilated Pts
+Neur1 <- tidy(chisq.test(PPPVent$Anti_Neuro, PPPVent$postop == "Post-Operative")) %>% mutate(Comparator = "Anti-Neuropathic Agents (Vent)")  
+
+# Non-Ventilated Pts
+Neur2 <- tidy(chisq.test(PPPNonVent$Anti_Neuro, PPPNonVent$postop == "Non-Operative")) %>% mutate(Comparator = "Anti-Neuropathic (Non-Vent)") 
+
+TotalAdjunctComparison <- rbind(Para1, Para2, NSAID1, NSAID2, Ket1, Ket2, RA1, RA2, Neur1, Neur2) %>% select(Comparator, p.value) %>%  as.data.frame() %>% format(scientific=FALSE)
+
+rmarkdown::paged_table(TotalAdjunctComparison)
+
+```
+
+## Part 9: Miscellaneous
+
+### Part a. Pain Assessment in Patients That Received Opioids Vs Those that Did Not.
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+# Generate Variable of had opioid vs have not.
+PPP_Assess_Opioid <- PPP2 %>% mutate(Opioid = case_when(
+  (Opioid_oMEDD_Tot > 0) ~ "Yes",
+  (Opioid_oMEDD_Tot == 0) ~ "No")) %>% 
+  select(Opioid, mech_vent, pain_assessed)
+
+#Ventilated 
+OpioidAssessMV <- PPP_Assess_Opioid %>% filter(mech_vent == "Ventilated") %>% filter(pain_assessed == "Yes")
+Cont.Table <- table(Opioid = OpioidAssessMV$Opioid, Pain_Assessed = OpioidAssessMV$pain_assessed)
+Cont.Table
+OpioidAssess1 <- tidy(prop.test(x = c(108, 31), n = c(139, 139))) %>% mutate(Comparator = "Assessment With/Without Opioids (Vent)") 
+
+# Non-Ventilated Pts
+OpioidAssessNonMV <- PPP_Assess_Opioid %>% filter(mech_vent == "Non-Ventilated") %>% filter(pain_assessed == "Yes")
+Cont.Table2 <- table(Opioid = OpioidAssessNonMV$Opioid, Pain_Assessed = OpioidAssessNonMV$pain_assessed)
+Cont.Table2
+OpioidAssess2 <- tidy(prop.test(x = c(134, 130), n = c(264, 264))) %>% mutate(Comparator = "Assessment With/Without Opioids (Vent)") 
+OpioidAssess2 <-  tidy(chisq.test(OpioidAssessNonMV$Opioid, OpioidAssessNonMV$pain_assessed)) %>% mutate(Comparator = "Assessment With/Without Opioids (Non-Vent)") 
+
+PainAssessOpioidComparison <- rbind(OpioidAssess1, OpioidAssess2) %>% select(Comparator, estimate1, estimate2, conf.low, conf.high, p.value) %>%  as.data.frame() %>% format(scientific=FALSE, digits = 1)
+
+
+Cont.Table2 <- table(Opioid = OpioidAssessNonMV$Opioid, Pain_Assessed = OpioidAssessNonMV$pain_assessed)
+
+rmarkdown::paged_table(PainAssessOpioidComparison)
+```
+
+
+### Part b. Table of Opioid Route by Ventilation Status
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+# Create Variables for Opioid Table
+# Opioid IV (Binary)
+PPP2 <- PPP2 %>% mutate(Opioid_IV = case_when(
+  (OpioidIV_Tot_oMEDD >0) ~ "Yes",
+  (OpioidIV_Tot_oMEDD ==0) ~ "No"))
+
+# Opioid PO (Binary)
+PPP2 <- PPP2 %>% mutate(Opioid_PO = case_when(
+  (OpioidPO_Tot_oMEDD >0) ~ "Yes",
+  (OpioidPO_Tot_oMEDD ==0) ~ "No"))
+
+# Opioid Tota (Binary)
+PPP2 <- PPP2 %>% mutate(Opioid_Tot = case_when(
+  (Opioid_oMEDD_Tot >0) ~ "Yes",
+  (Opioid_oMEDD_Tot ==0) ~ "No"))
+  
+# Create Table of Opioid Route
+topioids <- PPP2 %>% 
+  select(Opioid_IV, Opioid_PO, Opioid_Tot, mech_vent) %>% 
+  tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(Opioid_IV = "Intravenous Opioid",
+                             Opioid_PO = "Oral Opioid",
+                             Opioid_Tot = "Any Opioid"),
+               value = list(Opioid_IV ~ "Yes",
+                            Opioid_PO ~ "Yes",
+                            Opioid_Tot ~ "Yes"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 23. Opioid Administration Route**")
+
+topioids
+```
+
+### Part c. Table of All Analgesic Adjuncts by Ventilation Status
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+# Create Table of Analgesic Adjuncts
+
+tadjuncts<- PPP %>% 
+  select(Paracetamol, NSAID, intrv_type_ketinf___1, regional_anaesth, Anti_Neuro, mech_vent) %>% 
+    tbl_summary(by = mech_vent, ,missing = "no",
+                label = list(NSAID = "NSAIDs",
+                             intrv_type_ketinf___1 = "Ketamine Infusion",
+                             regional_anaesth = "Regional Analgesia",
+                             Anti_Neuro = "Anti-Neuropathic Agents"),
+               value = list(Paracetamol ~ "Yes",
+                            NSAID ~ "Yes",
+                            intrv_type_ketinf___1 ~ "Checked",
+                            regional_anaesth ~ "Yes",
+                            Anti_Neuro ~ "Yes"),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} ({p}%)")) %>% 
+   modify_spanning_header(starts_with("stat_") ~ "**Ventilation Status**") %>% 
+  modify_header(list(
+    label ~"**Analgesic Adjunct**")) %>% 
+  bold_labels() %>% 
+  add_overall() %>% 
+  modify_caption("**Table 2. Analgesic Adjuncts**")
+
+tadjuncts
+
+```
+
+
+
