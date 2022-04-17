@@ -129,7 +129,7 @@ Fig1 <- PPP %>% ggplot(aes(x = Assesstool, group = mech_vent))+
         panel.spacing.x = unit(2, "lines"))+
   scale_fill_manual(values = c("#abbcea", "#4D81DA"))+
   scale_x_discrete(limits=positions, labels=c("CPOT", "BPS", "NPS", "Faces", "NVPS", "Non-Val", "None" ))+
-  labs(x="Assessment Tools", y="Percentage (%)", title="Figure 1: Pain Assessment Tools")+
+  labs(x="Assessment Tools", y="Percentage (%)", title="Figure 1: Pain Assessment Frequency")+
   geom_text(aes( label = scales::percent(..prop.., accuracy = 0.1),
                  y= ..prop..), stat= "count", vjust = -.5, size = 3)
 
